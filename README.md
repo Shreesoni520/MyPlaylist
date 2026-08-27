@@ -10,6 +10,7 @@
 </p>
 
 <p align="center">
+  <a href="https://shree-s-my-playlist.vercel.app"><img alt="Live site" src="https://img.shields.io/badge/Live-shree--s--my--playlist.vercel.app-black?style=for-the-badge" /></a>
   <img alt="Next.js" src="https://img.shields.io/badge/Next.js-16-black?style=for-the-badge&logo=nextdotjs" />
   <img alt="React" src="https://img.shields.io/badge/React-19-61DAFB?style=for-the-badge&logo=react&logoColor=black" />
   <img alt="Tailwind" src="https://img.shields.io/badge/Tailwind-v4-38BDF8?style=for-the-badge&logo=tailwindcss&logoColor=white" />
@@ -25,6 +26,8 @@ Most playlist apps live on someone else's server. This one lives in **your room*
 After login you get a full-screen space: pick a color, photo, or looping `.mp4` for the wall, then drag a glass **Player** and **Edit** window wherever you want. Add songs with a YouTube link. Build playlists. Loop one track or shuffle the lot.
 
 No cloud account. No tracking. Your library stays on this machine.
+
+**Live:** [shree-s-my-playlist.vercel.app](https://shree-s-my-playlist.vercel.app)
 
 ---
 
