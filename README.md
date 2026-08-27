@@ -90,6 +90,12 @@ There is no server database to empty. A fresh browser (or a site reset) is a new
 
 ---
 
+## Author
+
+**Krishna Soni**
+
+---
+
 ## License
 
-Private music room. Built for Shree.
+Private music room. Built by **Krishna Soni**.
