@@ -56,19 +56,21 @@ export function SettingsDialog({
   const lastBackground = useRef<string | null>(null);
 
   if (!user) return null;
-  const username = user.username;
+  const currentUser = user;
+  const username = currentUser.username;
   const colorIsLight = isLightColor(color);
 
   async function setBackground(background: Background) {
     const key = `${background.kind}:${background.value}`;
     if (
       lastBackground.current === key ||
-      (user.background.kind === background.kind && user.background.value === background.value)
+      (currentUser.background.kind === background.kind &&
+        currentUser.background.value === background.value)
     ) {
       return;
     }
     lastBackground.current = key;
-    if (user.background.kind === "video" && background.kind !== "video") {
+    if (currentUser.background.kind === "video" && background.kind !== "video") {
       await deleteRoomVideo(username).catch(() => undefined);
     }
     updateUser({ background });
