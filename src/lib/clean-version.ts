@@ -1,1 +1,1 @@
-export const ACCOUNT_CLEAN_VERSION = "v5";
+export const ACCOUNT_CLEAN_VERSION = "v6";
