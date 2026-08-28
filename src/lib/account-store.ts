@@ -1,6 +1,7 @@
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
+import { ACCOUNT_CLEAN_VERSION } from "@/lib/clean-version";
 
 export type ServerAccount = {
   username: string;
@@ -10,7 +11,9 @@ export type ServerAccount = {
 };
 
 const ACCOUNT_PREFIX = "mp:account:";
+const CLEAN_KEY = "mp:clean_version";
 const LOCAL_FILE = path.join(process.cwd(), ".data", "accounts.json");
+const LOCAL_CLEAN_FILE = path.join(process.cwd(), ".data", "clean-version");
 
 function usernameKey(username: string) {
   return username.trim().toLowerCase();
@@ -74,7 +77,52 @@ async function writeLocal(accounts: Record<string, ServerAccount>) {
   await writeFile(LOCAL_FILE, JSON.stringify(accounts, null, 2), "utf8");
 }
 
+async function kvScan(pattern: string) {
+  const keys: string[] = [];
+  let cursor = "0";
+  do {
+    const result = await kvSend(["SCAN", cursor, "MATCH", pattern, "COUNT", 100]);
+    const pair = Array.isArray(result) ? result : ["0", []];
+    cursor = String(pair[0] ?? "0");
+    const batch = Array.isArray(pair[1]) ? (pair[1] as string[]) : [];
+    keys.push(...batch);
+  } while (cursor !== "0");
+  return keys;
+}
+
+async function deleteAllAccounts() {
+  if (useKv()) {
+    const keys = await kvScan(`${ACCOUNT_PREFIX}*`);
+    if (keys.length) await kvSend(["DEL", ...keys]);
+    await kvSend(["SET", CLEAN_KEY, ACCOUNT_CLEAN_VERSION]);
+    return;
+  }
+
+  await writeLocal({});
+  await mkdir(path.dirname(LOCAL_CLEAN_FILE), { recursive: true });
+  await writeFile(LOCAL_CLEAN_FILE, ACCOUNT_CLEAN_VERSION, "utf8");
+}
+
+async function currentCleanVersion() {
+  if (useKv()) {
+    const raw = await kvSend(["GET", CLEAN_KEY]);
+    return typeof raw === "string" ? raw : "";
+  }
+  try {
+    return (await readFile(LOCAL_CLEAN_FILE, "utf8")).trim();
+  } catch {
+    return "";
+  }
+}
+
+export async function applyAccountClean() {
+  const current = await currentCleanVersion();
+  if (current === ACCOUNT_CLEAN_VERSION) return;
+  await deleteAllAccounts();
+}
+
 export async function getAccount(username: string) {
+  await applyAccountClean();
   const key = usernameKey(username);
   if (!key) return null;
 
@@ -93,6 +141,7 @@ export async function getAccount(username: string) {
 }
 
 export async function createAccountRecord(username: string, password: string) {
+  await applyAccountClean();
   const trimmed = username.trim();
   const key = usernameKey(trimmed);
   const salt = makeSalt();

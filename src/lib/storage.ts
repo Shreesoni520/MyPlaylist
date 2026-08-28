@@ -1,10 +1,11 @@
 import { DEFAULT_BACKGROUND } from "@/lib/backgrounds";
+import { ACCOUNT_CLEAN_VERSION } from "@/lib/clean-version";
 import { colorFromName } from "@/lib/music";
 import type { Track, UserAccount } from "@/lib/types";
 
 const USERS_KEY = "mp_users_v2";
 const SESSION_KEY = "mp_session_v2";
-const CLEAN_FLAG = "mp_clean_v4";
+const CLEAN_FLAG = `mp_clean_${ACCOUNT_CLEAN_VERSION}`;
 
 function readUsers(): Record<string, UserAccount> {
   if (typeof window === "undefined") return {};

@@ -41,13 +41,13 @@ export function DesktopGate({ children }: { children: React.ReactNode }) {
           This music room needs a bigger screen.
         </h1>
         <p className="text-muted-foreground mt-5 max-w-md text-base leading-7">
-          Shree&apos;s Playlist is built as a desktop room: a full-screen background with floating
-          Player and Edit windows you can drag around. Phones and small screens do not have the
-          space for that, so sign in and the room itself stay on a computer or monitor.
+          Shree&apos;s Playlist is a desktop music room in the browser. The Player and Edit panels
+          float on a full-screen background, so they need a large screen — a Windows PC, a Mac, or
+          another desktop or laptop. Phones, tablets, and small screens are not supported.
         </p>
         <p className="text-muted-foreground mt-4 max-w-md text-sm leading-6">
-          Open this site on a laptop or desktop to create an account and play. Nothing is missing
-          on your phone — it just is not available here.
+          Open this site in Chrome, Safari, Edge, or another browser on a computer. There is no
+          phone app, and the room will not load on a mobile screen.
         </p>
       </div>
     </>

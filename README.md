@@ -35,7 +35,7 @@ No cloud account. No tracking. Your playlists and room stay on this computer.
 
 | | |
 | --- | --- |
-| **Desktop only** | Built for a computer or monitor — phones see a short explanation instead |
+| **Desktop only** | Windows, Mac, or another computer with a large screen — not phones |
 | **Unique username** | One username for the whole site, any browser |
 | **Your room** | Solid color, image upload, image URL, or a silent looping `.mp4` |
 | **Floating player** | Drag, resize, minimize, maximize — album art, seek, volume |
@@ -43,7 +43,7 @@ No cloud account. No tracking. Your playlists and room stay on this computer.
 | **Playlists** | Liked Songs, Discover Mix, plus any lists you create |
 | **Loop & shuffle** | Off / all / one, plus shuffle, from the `···` menu |
 | **Light on dark** | Header text flips black on a light room, white on a dark one |
-| **Private room data** | Playlists, volume, and the room live in this browser. Clear site data and that room is gone. The username stays yours. |
+| **Private room data** | Playlists, volume, and the room live in this browser |
 
 ---
 
@@ -70,7 +70,7 @@ Open [http://localhost:3000](http://localhost:3000), create a username, and walk
 ## How it works
 
 ```
-Sign up  →  your room  →  Player + Edit windows
+Sign up  →  your room  →  Player + Edit panels
                 │
                 ├─ Room: color / photo / .mp4
                 ├─ Add music: YouTube URL
@@ -78,8 +78,9 @@ Sign up  →  your room  →  Player + Edit windows
 ```
 
 - **Auth** is username + password. Accounts are stored on the server, so a username can only be taken once — Chrome, Firefox, another PC, it is the same list.
-- **Room, playlists, and library** stay in the browser. Clearing site data wipes that room, but you can sign back in with the same username.
-- **Desktop only.** Phones and small screens get a message instead of the room.
+- **Room, playlists, and library** stay in the browser.
+- **Desktop only.** Open it on a Windows PC, a Mac, or another large computer screen. Phones and tablets get a message instead of the room.
+- **Developer clean:** bump `ACCOUNT_CLEAN_VERSION` to wipe local rooms and delete every username from the account store. There is no reset button in the UI.
 - **Room videos** sit in IndexedDB so a looping `.mp4` can be large without blowing storage quotas.
 - **Track lookup** goes through `/api/find-track` so a pasted YouTube link can resolve to the full song.
 
