@@ -44,4 +44,5 @@ export type RoomProfile = {
   playlists: Playlist[];
   library: Track[];
   volume: number;
+  createdAt: number;
 };

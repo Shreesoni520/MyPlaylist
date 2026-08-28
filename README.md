@@ -25,7 +25,7 @@ Most playlist apps live on someone else's server. This one lives in **your room*
 
 After login you get a full-screen space: pick a color, photo, or looping `.mp4` for the wall, then drag a glass **Player** and **Edit** window wherever you want. Add songs with a YouTube link. Build playlists. Loop one track or shuffle the lot.
 
-No cloud account. No tracking. Your songs, playlists, and room follow the username.
+No cloud account. No tracking. Your room follows your login on any computer.
 
 **Live:** [shree-s-my-playlist.vercel.app](https://shree-s-my-playlist.vercel.app)
 
@@ -43,7 +43,7 @@ No cloud account. No tracking. Your songs, playlists, and room follow the userna
 | **Playlists** | Liked Songs, Discover Mix, plus any lists you create |
 | **Loop & shuffle** | Off / all / one, plus shuffle, from the `···` menu |
 | **Light on dark** | Header text flips black on a light room, white on a dark one |
-| **Saved with the account** | Songs, playlists, photo, and room background follow the username |
+| **Private room data** | Songs, playlists, photo, and background follow your username |
 
 ---
 
@@ -78,10 +78,10 @@ Sign up  →  your room  →  Player + Edit panels
 ```
 
 - **Auth** is username + password. Accounts are stored on the server, so a username can only be taken once — Chrome, Firefox, another PC, it is the same list.
-- **Songs, playlists, photo, and room background** are saved with that account, so another browser or incognito can load the same room after sign in.
+- **Room, playlists, library, and background** are saved with that account, so incognito or another computer can load the same room after you sign in.
 - **Desktop only.** Open it on a Windows PC, a Mac, or another large computer screen. Phones and tablets get a message instead of the room.
 - **Developer clean:** bump `ACCOUNT_CLEAN_VERSION` to wipe local rooms and delete every username from the account store. There is no reset button in the UI.
-- **Room videos** sit in IndexedDB so a looping `.mp4` can be large without blowing storage quotas. A looping video may not follow you to a new browser.
+- **Room videos** sit in IndexedDB on that computer (they are too large to copy automatically). Photos and YouTube songs still sync.
 - **Track lookup** goes through `/api/find-track` so a pasted YouTube link can resolve to the full song.
 
 ---

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAccount, getProfile, passwordsMatch } from "@/lib/account-store";
+import { getAccount, getRoomProfile, passwordsMatch } from "@/lib/account-store";
 import { withSession } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -27,9 +27,11 @@ export async function POST(request: Request) {
     if (!passwordsMatch(password, account)) {
       return NextResponse.json({ error: "Wrong password." }, { status: 401 });
     }
-    const profile = await getProfile(account.username);
     return withSession(
-      NextResponse.json({ username: account.username, profile }),
+      NextResponse.json({
+        username: account.username,
+        profile: await getRoomProfile(account.username),
+      }),
       account.username
     );
   } catch {

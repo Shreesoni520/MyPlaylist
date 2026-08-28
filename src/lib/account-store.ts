@@ -2,7 +2,6 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { ACCOUNT_CLEAN_VERSION } from "@/lib/clean-version";
-import { DEFAULT_BACKGROUND } from "@/lib/backgrounds";
 import type { RoomProfile } from "@/lib/types";
 
 export type ServerAccount = {
@@ -12,12 +11,15 @@ export type ServerAccount = {
   createdAt: number;
 };
 
+export type { RoomProfile };
+
 const ACCOUNT_PREFIX = "mp:account:";
 const PROFILE_PREFIX = "mp:profile:";
 const CLEAN_KEY = "mp:clean_version";
 const LOCAL_FILE = path.join(process.cwd(), ".data", "accounts.json");
 const LOCAL_PROFILES_FILE = path.join(process.cwd(), ".data", "profiles.json");
 const LOCAL_CLEAN_FILE = path.join(process.cwd(), ".data", "clean-version");
+const CHUNK_SIZE = 700_000;
 
 function usernameKey(username: string) {
   return username.trim().toLowerCase();
@@ -118,9 +120,10 @@ async function kvScan(pattern: string) {
 
 async function deleteAllAccounts() {
   if (useKv()) {
-    const accountKeys = await kvScan(`${ACCOUNT_PREFIX}*`);
-    const profileKeys = await kvScan(`${PROFILE_PREFIX}*`);
-    const keys = [...accountKeys, ...profileKeys];
+    const keys = [
+      ...(await kvScan(`${ACCOUNT_PREFIX}*`)),
+      ...(await kvScan(`${PROFILE_PREFIX}*`)),
+    ];
     if (keys.length) await kvSend(["DEL", ...keys]);
     await kvSend(["SET", CLEAN_KEY, ACCOUNT_CLEAN_VERSION]);
     return;
@@ -194,26 +197,39 @@ export async function createAccountRecord(username: string, password: string) {
   return account;
 }
 
-function compactProfile(profile: RoomProfile): RoomProfile {
-  const next = { ...profile };
-  if (next.avatar.startsWith("data:image/") && next.avatar.length > 400_000) {
-    next.avatar = "";
-  }
-  if (
-    (next.background.kind === "upload" && next.background.value.length > 400_000) ||
-    next.background.kind === "video"
-  ) {
-    next.background = DEFAULT_BACKGROUND;
-  }
-  return next;
+async function deleteProfileKeys(key: string) {
+  if (!useKv()) return;
+  const keys = [
+    `${PROFILE_PREFIX}${key}`,
+    `${PROFILE_PREFIX}${key}:meta`,
+    ...(await kvScan(`${PROFILE_PREFIX}${key}:*`)),
+  ];
+  const unique = Array.from(new Set(keys));
+  if (unique.length) await kvSend(["DEL", ...unique]);
 }
 
-export async function getProfile(username: string) {
+export async function getRoomProfile(username: string) {
   await applyAccountClean();
   const key = usernameKey(username);
   if (!key) return null;
 
   if (useKv()) {
+    const metaRaw = await kvSend(["GET", `${PROFILE_PREFIX}${key}:meta`]);
+    if (typeof metaRaw === "string" && metaRaw) {
+      try {
+        const meta = JSON.parse(metaRaw) as { chunks?: number };
+        const count = Math.max(0, Number(meta.chunks) || 0);
+        const parts: string[] = [];
+        for (let i = 0; i < count; i++) {
+          const part = await kvSend(["GET", `${PROFILE_PREFIX}${key}:${i}`]);
+          if (typeof part !== "string") return null;
+          parts.push(part);
+        }
+        return JSON.parse(parts.join("")) as RoomProfile;
+      } catch {
+        return null;
+      }
+    }
     const raw = await kvSend(["GET", `${PROFILE_PREFIX}${key}`]);
     if (typeof raw !== "string" || !raw) return null;
     try {
@@ -227,34 +243,33 @@ export async function getProfile(username: string) {
   return profiles[key] ?? null;
 }
 
-export async function saveProfile(username: string, profile: RoomProfile) {
+export async function saveRoomProfile(username: string, profile: RoomProfile) {
   await applyAccountClean();
   const key = usernameKey(username);
-  if (!key) return false;
-
-  const payload = compactProfile(profile);
-  const json = JSON.stringify(payload);
+  if (!key) throw new Error("Missing username.");
+  const payload = JSON.stringify(profile);
+  if (payload.length > 4_000_000) {
+    throw new Error("That room is too large to save.");
+  }
 
   if (useKv()) {
-    try {
-      await kvSend(["SET", `${PROFILE_PREFIX}${key}`, json]);
-      return true;
-    } catch {
-      const smaller = compactProfile({
-        ...payload,
-        avatar: payload.avatar.startsWith("data:") ? "" : payload.avatar,
-        background:
-          payload.background.kind === "upload" || payload.background.kind === "video"
-            ? DEFAULT_BACKGROUND
-            : payload.background,
-      });
-      await kvSend(["SET", `${PROFILE_PREFIX}${key}`, JSON.stringify(smaller)]);
-      return true;
+    await deleteProfileKeys(key);
+    if (payload.length <= CHUNK_SIZE) {
+      await kvSend(["SET", `${PROFILE_PREFIX}${key}`, payload]);
+      return;
     }
+    const chunks: string[] = [];
+    for (let i = 0; i < payload.length; i += CHUNK_SIZE) {
+      chunks.push(payload.slice(i, i + CHUNK_SIZE));
+    }
+    await kvSend(["SET", `${PROFILE_PREFIX}${key}:meta`, JSON.stringify({ chunks: chunks.length })]);
+    for (let i = 0; i < chunks.length; i++) {
+      await kvSend(["SET", `${PROFILE_PREFIX}${key}:${i}`, chunks[i]]);
+    }
+    return;
   }
 
   const profiles = await readLocalProfiles();
-  profiles[key] = payload;
+  profiles[key] = profile;
   await writeLocalProfiles(profiles);
-  return true;
 }

@@ -9,14 +9,13 @@ import {
   useRef,
   useState,
 } from "react";
+import { DEFAULT_BACKGROUND } from "@/lib/backgrounds";
 import {
-  applyRoomProfile,
+  createAccount,
   defaultAvatar,
   getUser,
   isCustomPhoto,
-  roomScore,
   saveUser,
-  toRoomProfile,
   wipeSiteData,
   withDefaultAvatar,
 } from "@/lib/storage";
@@ -45,21 +44,73 @@ async function readError(response: Response) {
   }
 }
 
-async function pushProfile(user: UserAccount) {
-  await fetch("/api/auth/profile", {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(toRoomProfile(user)),
+function toProfile(user: UserAccount): RoomProfile {
+  return {
+    displayName: user.displayName,
+    avatar: user.avatar,
+    background: user.background,
+    playlists: user.playlists,
+    library: user.library,
+    volume: user.volume,
+    createdAt: user.createdAt,
+  };
+}
+
+function fromProfile(username: string, profile: RoomProfile): UserAccount {
+  return withDefaultAvatar({
+    username,
+    passwordHash: "",
+    salt: "",
+    displayName: profile.displayName,
+    avatar: profile.avatar,
+    background: profile.background,
+    playlists: profile.playlists,
+    library: profile.library,
+    volume: profile.volume,
+    createdAt: profile.createdAt,
   });
 }
 
-function pickRoom(username: string, serverProfile: RoomProfile | null) {
+function isSparseRoom(user: UserAccount) {
+  const extraPlaylists = user.playlists.filter((playlist) => playlist.id !== "liked" && playlist.id !== "discover");
+  const hasTracks =
+    user.library.length > 0 || user.playlists.some((playlist) => playlist.trackIds.length > 0);
+  const customBackground =
+    user.background.value !== DEFAULT_BACKGROUND.value || user.background.kind === "upload" || user.background.kind === "url" || user.background.kind === "video";
+  return !hasTracks && extraPlaylists.length === 0 && !customBackground && !isCustomPhoto(user.avatar);
+}
+
+async function pushRoom(user: UserAccount) {
+  const response = await fetch("/api/auth/profile", {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ profile: toProfile(user) }),
+  });
+  if (!response.ok) throw new Error(await readError(response));
+}
+
+async function hydrateRoom(username: string, cloud: RoomProfile | null | undefined) {
   const local = getUser(username);
-  const fromServer = withDefaultAvatar(applyRoomProfile(username, serverProfile));
-  const fromLocal = local ? withDefaultAvatar(local) : null;
-  if (fromLocal && roomScore(fromLocal) > roomScore(fromServer)) return fromLocal;
-  if (serverProfile) return fromServer;
-  return fromLocal ?? fromServer;
+  const localUser = local ? withDefaultAvatar(local) : null;
+  const cloudUser = cloud ? fromProfile(username, cloud) : null;
+
+  if (cloudUser && !isSparseRoom(cloudUser)) {
+    saveUser(cloudUser);
+    return cloudUser;
+  }
+  if (localUser && !isSparseRoom(localUser)) {
+    saveUser(localUser);
+    await pushRoom(localUser).catch(() => undefined);
+    return localUser;
+  }
+  if (cloudUser) {
+    saveUser(cloudUser);
+    return cloudUser;
+  }
+  const created = localUser ?? createAccount(username, "", "");
+  saveUser(created);
+  await pushRoom(created).catch(() => undefined);
+  return created;
 }
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
@@ -67,13 +118,17 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<UserAccount | null>(null);
   const saveTimer = useRef<number | null>(null);
 
-  const openRoom = useCallback(async (username: string, profile: RoomProfile | null) => {
-    const picked = pickRoom(username, profile);
-    saveUser(picked);
-    setUser(picked);
-    if (!profile || roomScore(picked) > roomScore(applyRoomProfile(username, profile))) {
-      await pushProfile(picked);
-    }
+  useEffect(() => {
+    return () => {
+      if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    };
+  }, []);
+
+  const queueCloudSave = useCallback((next: UserAccount) => {
+    if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    saveTimer.current = window.setTimeout(() => {
+      void pushRoom(next).catch(() => undefined);
+    }, 500);
   }, []);
 
   useEffect(() => {
@@ -85,13 +140,14 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       if (cancelled) return;
       try {
         const response = await fetch("/api/auth/me", { cache: "no-store" });
-        const data = (await response.json()) as {
-          username?: string | null;
-          profile?: RoomProfile | null;
-        };
+        const data = (await response.json()) as { username?: string | null; profile?: RoomProfile | null };
         if (cancelled) return;
-        if (data.username) await openRoom(data.username, data.profile ?? null);
-        else setUser(null);
+        if (data.username) {
+          const profile = await hydrateRoom(data.username, data.profile);
+          if (!cancelled) setUser(profile);
+        } else {
+          setUser(null);
+        }
       } catch {
         if (!cancelled) setUser(null);
       }
@@ -101,9 +157,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     void boot();
     return () => {
       cancelled = true;
-      if (saveTimer.current) window.clearTimeout(saveTimer.current);
     };
-  }, [openRoom]);
+  }, []);
 
   const login = useCallback(async (username: string, password: string) => {
     const response = await fetch("/api/auth/login", {
@@ -112,9 +167,10 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       body: JSON.stringify({ username, password }),
     });
     if (!response.ok) throw new Error(await readError(response));
-    const data = (await response.json()) as { username: string; profile: RoomProfile | null };
-    await openRoom(data.username, data.profile);
-  }, [openRoom]);
+    const data = (await response.json()) as { username: string; profile?: RoomProfile | null };
+    const profile = await hydrateRoom(data.username, data.profile);
+    setUser(profile);
+  }, []);
 
   const register = useCallback(async (username: string, password: string, confirm: string) => {
     const response = await fetch("/api/auth/register", {
@@ -123,14 +179,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       body: JSON.stringify({ username, password, confirm }),
     });
     if (!response.ok) throw new Error(await readError(response));
-    const data = (await response.json()) as { username: string; profile: RoomProfile | null };
-    await openRoom(data.username, data.profile);
-  }, [openRoom]);
+    const data = (await response.json()) as { username: string };
+    const profile = await hydrateRoom(data.username, null);
+    setUser(profile);
+  }, []);
 
   const logout = useCallback(() => {
     if (saveTimer.current) window.clearTimeout(saveTimer.current);
+    setUser((current) => {
+      if (current) void pushRoom(current).catch(() => undefined);
+      return null;
+    });
     void fetch("/api/auth/logout", { method: "POST" });
-    setUser(null);
   }, []);
 
   const updateUser = useCallback(
@@ -157,14 +217,11 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
           return current;
         }
         saveUser(synced);
-        if (saveTimer.current) window.clearTimeout(saveTimer.current);
-        saveTimer.current = window.setTimeout(() => {
-          void pushProfile(synced);
-        }, 400);
+        queueCloudSave(synced);
         return synced;
       });
     },
-    []
+    [queueCloudSave]
   );
 
   const value = useMemo(
