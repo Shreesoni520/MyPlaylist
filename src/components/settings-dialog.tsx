@@ -136,9 +136,10 @@ export function SettingsDialog({
       toast.success("Room video saved. Other browsers can load it now.", {
         id: VIDEO_UPLOAD_TOAST,
         description: "The first load on a new browser can still take a bit.",
+        duration: 15_000,
       });
     } catch {
-      toast.error("Could not save that video.", { id: VIDEO_UPLOAD_TOAST });
+      toast.error("Could not save that video.", { id: VIDEO_UPLOAD_TOAST, duration: 15_000 });
     } finally {
       setSavingVideo(false);
       setVideoPercent(0);
@@ -165,7 +166,9 @@ export function SettingsDialog({
       open={open}
       onOpenChange={(next) => {
         if (!next && savingVideo) {
-          toast.message("Video is still saving in the background. Keep this page open.");
+          toast.message("Video is still saving in the background. Keep this page open.", {
+            duration: 15_000,
+          });
         }
         onOpenChange(next);
       }}

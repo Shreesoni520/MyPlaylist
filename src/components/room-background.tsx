@@ -71,10 +71,11 @@ export function RoomBackground({ user }: { user: UserAccount }) {
             if (!cancelled) {
               toast.success("Room video saved. Other browsers can load it now.", {
                 id: VIDEO_UPLOAD_TOAST,
+                duration: 15_000,
               });
             }
           } catch {
-            if (!cancelled) toast.error("Could not save that video.", { id: VIDEO_UPLOAD_TOAST });
+            if (!cancelled) toast.error("Could not save that video.", { id: VIDEO_UPLOAD_TOAST, duration: 15_000 });
           }
         }
         return;
@@ -123,7 +124,7 @@ export function RoomBackground({ user }: { user: UserAccount }) {
             new File([blob], "room.mp4", { type: blob.type || "video/mp4" })
           ).catch(() => undefined);
           if (!cancelled) {
-            toast.success("Room video loaded.", { id: VIDEO_DOWNLOAD_TOAST });
+            toast.success("Room video loaded.", { id: VIDEO_DOWNLOAD_TOAST, duration: 15_000 });
             showVideo(blob);
           }
           return;
@@ -136,6 +137,7 @@ export function RoomBackground({ user }: { user: UserAccount }) {
       if (!cancelled) {
         toast.error("Could not load that room video yet. Refresh in a moment.", {
           id: VIDEO_DOWNLOAD_TOAST,
+          duration: 15_000,
         });
       }
     }
