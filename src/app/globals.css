@@ -143,32 +143,30 @@
 }
 
 .glass-window {
-  background: rgb(10 10 16 / 46%);
+  background: rgb(10 10 16 / 52%);
   color: white;
   border: 1px solid rgb(255 255 255 / 22%);
-  box-shadow: 0 16px 50px rgb(0 0 0 / 35%);
-  backdrop-filter: blur(22px);
-  -webkit-backdrop-filter: blur(22px);
-  animation: window-in 0.22s ease-out both;
+  box-shadow: 0 10px 28px rgb(0 0 0 / 28%);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  animation: window-in 0.12s ease-out both;
 }
 
 .glass-window.window-size-motion {
-  transition: height 0.2s ease-out;
+  transition: height 0.12s ease-out;
 }
 
 @keyframes window-in {
   from {
     opacity: 0;
-    transform: translateY(6px);
   }
   to {
     opacity: 1;
-    transform: none;
   }
 }
 
 .page-in {
-  animation: page-in 0.22s ease-out both;
+  animation: page-in 0.12s ease-out both;
 }
 
 @keyframes page-in {
@@ -185,9 +183,9 @@ a,
 [role="tab"],
 [role="button"] {
   transition:
-    background-color 0.15s ease,
-    color 0.15s ease,
-    border-color 0.15s ease;
+    background-color 0.1s ease,
+    color 0.1s ease,
+    border-color 0.1s ease;
 }
 
 nextjs-portal {

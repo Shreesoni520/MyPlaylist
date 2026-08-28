@@ -55,22 +55,23 @@ export function RoomBackground({ user }: { user: UserAccount }) {
         showVideo(blob);
         const meta = await cloudVideoMeta().catch(() => ({ exists: false as const }));
         if (!cancelled && (!meta.exists || meta.stamp !== stamp)) {
-          toast.loading("Saving room video… 1%", {
+          toast.loading("Saving… 1%", {
             id: VIDEO_UPLOAD_TOAST,
-            description: "This can take a minute. Keep this page open so other browsers can load it.",
+            description: "Keep this page open.",
             duration: Infinity,
           });
           try {
             await uploadRoomVideo(blob, stamp, (percent) => {
-              toast.loading(`Saving room video… ${percent}%`, {
+              toast.loading(`Saving… ${percent}%`, {
                 id: VIDEO_UPLOAD_TOAST,
-                description: "This can take a minute. Keep this page open so other browsers can load it.",
+                description: "Keep this page open.",
                 duration: Infinity,
               });
             });
             if (!cancelled) {
-              toast.success("Room video saved. Other browsers can load it now.", {
+              toast.success("Room video saved.", {
                 id: VIDEO_UPLOAD_TOAST,
+                description: "Other browsers can load it now.",
                 duration: 15_000,
               });
             }
@@ -89,9 +90,9 @@ export function RoomBackground({ user }: { user: UserAccount }) {
         if (!meta.exists) {
           setLoadNote("Waiting for the video to finish saving…");
           setLoadPercent((prev) => (prev < 12 ? 12 : prev));
-          toast.loading("Waiting for your room video…", {
+          toast.loading("Waiting for your video…", {
             id: VIDEO_DOWNLOAD_TOAST,
-            description: "It is still uploading from your other browser. This can take a minute.",
+            description: "Still uploading from your other browser.",
             duration: Infinity,
           });
           await sleep(2500);
@@ -99,18 +100,18 @@ export function RoomBackground({ user }: { user: UserAccount }) {
         }
 
         setLoadNote("Downloading room video…");
-        toast.loading("Loading room video… 1%", {
+        toast.loading("Loading video… 1%", {
           id: VIDEO_DOWNLOAD_TOAST,
-          description: "First load on a new browser can take a minute. After that it stays here.",
+          description: "First load can take a minute.",
           duration: Infinity,
         });
         try {
           blob = await downloadRoomVideo((percent) => {
             if (cancelled) return;
             setLoadPercent(percent);
-            toast.loading(`Loading room video… ${percent}%`, {
+            toast.loading(`Loading video… ${percent}%`, {
               id: VIDEO_DOWNLOAD_TOAST,
-              description: "First load on a new browser can take a minute. After that it stays here.",
+              description: "First load can take a minute.",
               duration: Infinity,
             });
           });
@@ -124,7 +125,11 @@ export function RoomBackground({ user }: { user: UserAccount }) {
             new File([blob], "room.mp4", { type: blob.type || "video/mp4" })
           ).catch(() => undefined);
           if (!cancelled) {
-            toast.success("Room video loaded.", { id: VIDEO_DOWNLOAD_TOAST, duration: 15_000 });
+            toast.success("Room video loaded.", {
+              id: VIDEO_DOWNLOAD_TOAST,
+              description: "It will stay on this computer now.",
+              duration: 15_000,
+            });
             showVideo(blob);
           }
           return;
@@ -153,12 +158,13 @@ export function RoomBackground({ user }: { user: UserAccount }) {
   if (user.background.kind === "video" && videoUrl) {
     return (
       <video
-        className="absolute inset-0 size-full object-cover"
+        className="pointer-events-none absolute inset-0 size-full object-cover"
         src={videoUrl}
         autoPlay
         loop
         muted
         playsInline
+        preload="auto"
       />
     );
   }

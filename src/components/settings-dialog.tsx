@@ -117,9 +117,9 @@ export function SettingsDialog({
     setSavingVideo(true);
     setVideoPercent(1);
     const stamp = `${file.name}:${Date.now()}`;
-    toast.loading("Saving room video… 1%", {
+    toast.loading("Saving… 1%", {
       id: VIDEO_UPLOAD_TOAST,
-      description: "This can take a minute. Keep this page open so other browsers can load it.",
+      description: "Keep this page open.",
       duration: Infinity,
     });
     try {
@@ -127,15 +127,15 @@ export function SettingsDialog({
       updateUser({ background: { kind: "video", value: stamp } });
       await uploadRoomVideo(file, stamp, (percent) => {
         setVideoPercent(percent);
-        toast.loading(`Saving room video… ${percent}%`, {
+        toast.loading(`Saving… ${percent}%`, {
           id: VIDEO_UPLOAD_TOAST,
-          description: "This can take a minute. Keep this page open so other browsers can load it.",
+          description: "Keep this page open.",
           duration: Infinity,
         });
       });
-      toast.success("Room video saved. Other browsers can load it now.", {
+      toast.success("Room video saved.", {
         id: VIDEO_UPLOAD_TOAST,
-        description: "The first load on a new browser can still take a bit.",
+        description: "Other browsers can load it now.",
         duration: 15_000,
       });
     } catch {
@@ -166,7 +166,8 @@ export function SettingsDialog({
       open={open}
       onOpenChange={(next) => {
         if (!next && savingVideo) {
-          toast.message("Video is still saving in the background. Keep this page open.", {
+          toast.message("Still saving in the background.", {
+            description: "Keep this page open.",
             duration: 15_000,
           });
         }

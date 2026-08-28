@@ -111,6 +111,7 @@ export function FloatingWindow({
   const [interacting, setInteracting] = useState(false);
   const drag = useRef<{ startX: number; startY: number; originX: number; originY: number } | null>(null);
   const resize = useRef<{ startX: number; startY: number; originW: number; originH: number } | null>(null);
+  const windowRef = useRef<HTMLDivElement>(null);
   const restore = useRef({ x: defaultX, y: defaultY, width: defaultWidth, height: defaultHeight });
   const defaultsRef = useRef({
     defaultX,
@@ -190,17 +191,23 @@ export function FloatingWindow({
 
   function onPointerMove(event: React.PointerEvent<HTMLDivElement>) {
     if (!drag.current) return;
-    setPos({
-      x: drag.current.originX + (event.clientX - drag.current.startX),
-      y: drag.current.originY + (event.clientY - drag.current.startY),
-    });
+    const x = drag.current.originX + (event.clientX - drag.current.startX);
+    const y = drag.current.originY + (event.clientY - drag.current.startY);
+    const node = windowRef.current;
+    if (node) {
+      node.style.left = `${x}px`;
+      node.style.top = `${y}px`;
+    }
   }
 
   function onPointerUp(event: React.PointerEvent<HTMLDivElement>) {
     if (drag.current) {
+      const x = drag.current.originX + (event.clientX - drag.current.startX);
+      const y = drag.current.originY + (event.clientY - drag.current.startY);
+      setPos({ x, y });
       persistLayout({
-        x: drag.current.originX + (event.clientX - drag.current.startX),
-        y: drag.current.originY + (event.clientY - drag.current.startY),
+        x,
+        y,
         width: size.width,
         height: minimized ? restore.current.height : size.height,
       });
@@ -261,23 +268,28 @@ export function FloatingWindow({
     if (!resize.current) return;
     const maxW = viewport.width - pos.x - VIEW_PAD;
     const maxH = viewport.height - pos.y - VIEW_PAD;
+    const nextWidth = Math.min(maxW, Math.max(MIN_WIDTH, resize.current.originW + (event.clientX - resize.current.startX)));
     const nextHeight = Math.min(maxH, Math.max(minHeight, resize.current.originH + (event.clientY - resize.current.startY)));
-    setMinimized(nextHeight < minHeight + LIBRARY_SPACE);
-    setSize({
-      width: Math.min(maxW, Math.max(MIN_WIDTH, resize.current.originW + (event.clientX - resize.current.startX))),
-      height: nextHeight,
-    });
+    const node = windowRef.current;
+    if (node) {
+      node.style.width = `${nextWidth}px`;
+      node.style.height = `${nextHeight}px`;
+    }
   }
 
   function onResizeUp(event: React.PointerEvent<HTMLDivElement>) {
     if (resize.current) {
       const maxW = viewport.width - pos.x - VIEW_PAD;
       const maxH = viewport.height - pos.y - VIEW_PAD;
+      const nextWidth = Math.min(maxW, Math.max(MIN_WIDTH, resize.current.originW + (event.clientX - resize.current.startX)));
+      const nextHeight = Math.min(maxH, Math.max(minHeight, resize.current.originH + (event.clientY - resize.current.startY)));
+      setMinimized(nextHeight < minHeight + LIBRARY_SPACE);
+      setSize({ width: nextWidth, height: nextHeight });
       persistLayout({
         x: pos.x,
         y: pos.y,
-        width: Math.min(maxW, Math.max(MIN_WIDTH, resize.current.originW + (event.clientX - resize.current.startX))),
-        height: Math.min(maxH, Math.max(minHeight, resize.current.originH + (event.clientY - resize.current.startY))),
+        width: nextWidth,
+        height: nextHeight,
       });
     }
     resize.current = null;
@@ -304,6 +316,7 @@ export function FloatingWindow({
 
   return (
     <div
+      ref={windowRef}
       className={cn(
         "glass-window group/window fixed flex flex-col overflow-hidden rounded-xl",
         !interacting && "window-size-motion",
