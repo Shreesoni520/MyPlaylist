@@ -17,7 +17,14 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/auth-context";
 import { BACKGROUND_PRESETS } from "@/lib/backgrounds";
 import { isLightColor } from "@/lib/contrast";
-import { deleteCloudVideo, deleteRoomVideo, isMp4File, saveRoomVideo, uploadRoomVideo } from "@/lib/room-media";
+import {
+  deleteCloudVideo,
+  deleteRoomVideo,
+  isMp4File,
+  saveRoomVideo,
+  uploadRoomVideo,
+  VIDEO_UPLOAD_TOAST,
+} from "@/lib/room-media";
 import { cn } from "@/lib/utils";
 import type { Background } from "@/lib/types";
 
@@ -50,6 +57,7 @@ export function SettingsDialog({
     user?.background.kind === "url" ? user.background.value : ""
   );
   const [savingVideo, setSavingVideo] = useState(false);
+  const [videoPercent, setVideoPercent] = useState(0);
   const imageRef = useRef<HTMLInputElement>(null);
   const videoRef = useRef<HTMLInputElement>(null);
   const colorTimer = useRef<number | null>(null);
@@ -107,16 +115,33 @@ export function SettingsDialog({
       return;
     }
     setSavingVideo(true);
+    setVideoPercent(1);
+    const stamp = `${file.name}:${Date.now()}`;
+    toast.loading("Saving room video… 1%", {
+      id: VIDEO_UPLOAD_TOAST,
+      description: "This can take a minute. Keep this page open so other browsers can load it.",
+      duration: Infinity,
+    });
     try {
-      const stamp = `${file.name}:${Date.now()}`;
       await saveRoomVideo(username, file);
-      await uploadRoomVideo(file, stamp);
       updateUser({ background: { kind: "video", value: stamp } });
-      toast.success("Looping .mp4 room video set");
+      await uploadRoomVideo(file, stamp, (percent) => {
+        setVideoPercent(percent);
+        toast.loading(`Saving room video… ${percent}%`, {
+          id: VIDEO_UPLOAD_TOAST,
+          description: "This can take a minute. Keep this page open so other browsers can load it.",
+          duration: Infinity,
+        });
+      });
+      toast.success("Room video saved. Other browsers can load it now.", {
+        id: VIDEO_UPLOAD_TOAST,
+        description: "The first load on a new browser can still take a bit.",
+      });
     } catch {
-      toast.error("Could not save that video.");
+      toast.error("Could not save that video.", { id: VIDEO_UPLOAD_TOAST });
     } finally {
       setSavingVideo(false);
+      setVideoPercent(0);
       if (videoRef.current) videoRef.current.value = "";
     }
   }
@@ -136,7 +161,15 @@ export function SettingsDialog({
   }
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!next && savingVideo) {
+          toast.message("Video is still saving in the background. Keep this page open.");
+        }
+        onOpenChange(next);
+      }}
+    >
       <DialogContent className="bg-white text-neutral-950 sm:max-w-xl">
         <DialogHeader>
           <DialogTitle>Your room</DialogTitle>
@@ -154,9 +187,15 @@ export function SettingsDialog({
           >
             <Video className="size-5" />
             <span className="text-sm font-medium">
-              {savingVideo ? "Saving..." : user.background.kind === "video" ? "Replace .mp4" : "Upload .mp4"}
+              {savingVideo
+                ? `${videoPercent || 1}%`
+                : user.background.kind === "video"
+                  ? "Replace .mp4"
+                  : "Upload .mp4"}
             </span>
-            <span className="text-[11px] text-white/60">Silent loop</span>
+            <span className="text-[11px] text-white/60">
+              {savingVideo ? "Saving to your account" : "Silent loop"}
+            </span>
           </button>
 
           <button
@@ -193,6 +232,29 @@ export function SettingsDialog({
             </span>
           </label>
         </div>
+
+        {savingVideo ? (
+          <div className="rounded-lg bg-neutral-100 px-3 py-2.5">
+            <div className="mb-1.5 flex items-center justify-between text-xs text-neutral-700">
+              <span>Uploading room video</span>
+              <span className="tabular-nums font-medium">{videoPercent || 1}%</span>
+            </div>
+            <div className="h-1.5 overflow-hidden rounded-full bg-neutral-200">
+              <div
+                className="h-full rounded-full bg-black transition-[width] duration-200"
+                style={{ width: `${Math.max(2, videoPercent)}%` }}
+              />
+            </div>
+            <p className="mt-2 text-[11px] leading-4 text-neutral-500">
+              This can take a minute on a large file. Keep this page open. Your room already plays it here; other
+              browsers will see it after this bar finishes.
+            </p>
+          </div>
+        ) : (
+          <p className="text-[11px] leading-4 text-neutral-500">
+            Photos save instantly. A looping video is larger, so a percent will show while it copies to your account.
+          </p>
+        )}
 
         <div className="grid grid-cols-5 gap-2">
           {COLOR_PRESETS.map((preset) => (

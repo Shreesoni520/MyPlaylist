@@ -1,3 +1,5 @@
+import { VIDEO_CHUNK_BYTES, VIDEO_UPLOAD_CONCURRENCY } from "@/lib/video-chunk";
+
 const DB_NAME = "mp_room_media_v1";
 const STORE = "videos";
 
@@ -58,7 +60,17 @@ export async function deleteRoomVideo(username: string) {
   });
 }
 
-const CLOUD_CHUNK = 600_000;
+export const VIDEO_UPLOAD_TOAST = "room-video-upload";
+export const VIDEO_DOWNLOAD_TOAST = "room-video-download";
+
+type ProgressFn = (percent: number) => void;
+
+type UploadJob = {
+  promise: Promise<void>;
+  listeners: Set<ProgressFn>;
+};
+
+const uploadJobs = new Map<string, UploadJob>();
 
 export async function cloudVideoMeta() {
   const response = await fetch("/api/auth/video", { cache: "no-store" });
@@ -72,8 +84,22 @@ export async function cloudVideoMeta() {
   };
 }
 
-export async function uploadRoomVideo(file: Blob, stamp: string) {
-  const chunks = Math.max(1, Math.ceil(file.size / CLOUD_CHUNK));
+async function runPool(count: number, worker: (index: number) => Promise<void>) {
+  let next = 0;
+  async function run() {
+    while (next < count) {
+      const index = next;
+      next += 1;
+      await worker(index);
+    }
+  }
+  const workers = Math.min(VIDEO_UPLOAD_CONCURRENCY, Math.max(1, count));
+  await Promise.all(Array.from({ length: workers }, () => run()));
+}
+
+async function doUpload(file: Blob, stamp: string, onProgress: ProgressFn) {
+  const chunks = Math.max(1, Math.ceil(file.size / VIDEO_CHUNK_BYTES));
+  onProgress(1);
   const init = await fetch("/api/auth/video", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
@@ -86,32 +112,63 @@ export async function uploadRoomVideo(file: Blob, stamp: string) {
     }),
   });
   if (!init.ok) throw new Error("Could not start video upload.");
-  for (let index = 0; index < chunks; index++) {
-    const slice = file.slice(index * CLOUD_CHUNK, (index + 1) * CLOUD_CHUNK);
+
+  let finished = 0;
+  await runPool(chunks, async (index) => {
+    const slice = file.slice(index * VIDEO_CHUNK_BYTES, (index + 1) * VIDEO_CHUNK_BYTES);
     const posted = await fetch(`/api/auth/video?index=${index}`, {
       method: "POST",
       headers: { "Content-Type": "application/octet-stream" },
       body: slice,
     });
     if (!posted.ok) throw new Error("Could not upload that video.");
-  }
+    finished += 1;
+    onProgress(Math.min(99, Math.round((finished / chunks) * 97) + 2));
+  });
+
   const done = await fetch("/api/auth/video", {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ action: "complete" }),
   });
   if (!done.ok) throw new Error("Could not finish video upload.");
+  onProgress(100);
 }
 
-export async function downloadRoomVideo() {
-  const meta = await cloudVideoMeta();
-  if (!meta.exists || !meta.chunks) return null;
-  const parts: Blob[] = [];
-  for (let index = 0; index < meta.chunks; index++) {
-    const response = await fetch(`/api/auth/video?index=${index}`, { cache: "no-store" });
-    if (!response.ok) return null;
-    parts.push(await response.blob());
+export async function uploadRoomVideo(file: Blob, stamp: string, onProgress?: ProgressFn) {
+  const existing = uploadJobs.get(stamp);
+  if (existing) {
+    if (onProgress) existing.listeners.add(onProgress);
+    return existing.promise;
   }
+
+  const listeners = new Set<ProgressFn>();
+  if (onProgress) listeners.add(onProgress);
+  const notify: ProgressFn = (percent) => {
+    listeners.forEach((fn) => fn(percent));
+  };
+  const promise = doUpload(file, stamp, notify).finally(() => {
+    uploadJobs.delete(stamp);
+  });
+  uploadJobs.set(stamp, { promise, listeners });
+  return promise;
+}
+
+export async function downloadRoomVideo(onProgress?: ProgressFn) {
+  const meta = await cloudVideoMeta();
+  const chunkCount = meta.chunks ?? 0;
+  if (!meta.exists || chunkCount < 1) return null;
+  onProgress?.(1);
+  const parts: Blob[] = new Array(chunkCount);
+  let finished = 0;
+  await runPool(chunkCount, async (index) => {
+    const response = await fetch(`/api/auth/video?index=${index}`, { cache: "no-store" });
+    if (!response.ok) throw new Error("Could not download that video.");
+    parts[index] = await response.blob();
+    finished += 1;
+    onProgress?.(Math.min(99, Math.round((finished / chunkCount) * 97) + 2));
+  });
+  onProgress?.(100);
   return new Blob(parts, { type: meta.type || "video/mp4" });
 }
 

@@ -1,7 +1,7 @@
 import { DEFAULT_BACKGROUND } from "@/lib/backgrounds";
 import { ACCOUNT_CLEAN_VERSION } from "@/lib/clean-version";
 import { colorFromName } from "@/lib/music";
-import type { RoomProfile, Track, UserAccount } from "@/lib/types";
+import type { Track, UserAccount } from "@/lib/types";
 
 const USERS_KEY = "mp_users_v2";
 const SESSION_KEY = "mp_session_v2";
@@ -154,36 +154,4 @@ export function mergeLibrary(user: UserAccount, tracks: Track[]) {
       : playlist
   );
   return { ...user, library, playlists: nextPlaylists };
-}
-
-export function toRoomProfile(user: UserAccount): RoomProfile {
-  return {
-    displayName: user.displayName,
-    avatar: user.avatar,
-    background: user.background,
-    playlists: user.playlists,
-    library: user.library,
-    volume: user.volume,
-  };
-}
-
-export function applyRoomProfile(username: string, profile: RoomProfile | null): UserAccount {
-  const base = createAccount(username, "", "");
-  if (!profile) return base;
-  return {
-    ...base,
-    displayName: profile.displayName || base.displayName,
-    avatar: profile.avatar || base.avatar,
-    background: profile.background || base.background,
-    playlists: profile.playlists?.length ? profile.playlists : base.playlists,
-    library: profile.library ?? base.library,
-    volume: typeof profile.volume === "number" ? profile.volume : base.volume,
-  };
-}
-
-export function roomScore(user: UserAccount) {
-  const extraLists = user.playlists.filter((playlist) => playlist.id !== "liked" && playlist.id !== "discover").length;
-  const customBg = user.background.kind !== "preset" && user.background.kind !== "color" ? 8 : 0;
-  const photo = isCustomPhoto(user.avatar) ? 4 : 0;
-  return user.library.length * 3 + extraLists * 5 + customBg + photo;
 }

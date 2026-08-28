@@ -3,6 +3,7 @@ import path from "node:path";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { ACCOUNT_CLEAN_VERSION } from "@/lib/clean-version";
 import type { RoomProfile } from "@/lib/types";
+import { VIDEO_CHUNK_BYTES, VIDEO_MAX_CHUNKS } from "@/lib/video-chunk";
 
 export type ServerAccount = {
   username: string;
@@ -22,7 +23,6 @@ const LOCAL_PROFILES_FILE = path.join(process.cwd(), ".data", "profiles.json");
 const LOCAL_VIDEO_DIR = path.join(process.cwd(), ".data", "videos");
 const LOCAL_CLEAN_FILE = path.join(process.cwd(), ".data", "clean-version");
 const CHUNK_SIZE = 700_000;
-const VIDEO_CHUNK = 600_000;
 
 function usernameKey(username: string) {
   return username.trim().toLowerCase();
@@ -135,6 +135,7 @@ async function deleteAllAccounts() {
 
   await writeLocal({});
   await writeLocalProfiles({});
+  await rm(LOCAL_VIDEO_DIR, { recursive: true, force: true }).catch(() => undefined);
   await mkdir(path.dirname(LOCAL_CLEAN_FILE), { recursive: true });
   await writeFile(LOCAL_CLEAN_FILE, ACCOUNT_CLEAN_VERSION, "utf8");
 }
@@ -308,7 +309,7 @@ export async function initRoomVideo(username: string, meta: Omit<VideoMeta, "com
   const key = usernameKey(username);
   if (!key) throw new Error("Missing username.");
   if (meta.size > 50 * 1024 * 1024) throw new Error("That video is too large.");
-  if (meta.chunks < 1 || meta.chunks > 200) throw new Error("That video cannot be saved.");
+  if (meta.chunks < 1 || meta.chunks > VIDEO_MAX_CHUNKS) throw new Error("That video cannot be saved.");
   await deleteVideoKeys(key);
   const record: VideoMeta = { ...meta, complete: false };
   if (useKv()) {
@@ -324,8 +325,8 @@ export async function saveVideoChunk(username: string, index: number, data: Buff
   await applyAccountClean();
   const key = usernameKey(username);
   if (!key) throw new Error("Missing username.");
-  if (index < 0 || index > 199) throw new Error("Bad chunk.");
-  if (data.length > VIDEO_CHUNK + 8_192) throw new Error("Chunk too large.");
+  if (index < 0 || index >= VIDEO_MAX_CHUNKS) throw new Error("Bad chunk.");
+  if (data.length > VIDEO_CHUNK_BYTES + 8_192) throw new Error("Chunk too large.");
   const meta = await getVideoMeta(username);
   if (!meta || meta.complete) throw new Error("Video upload is not open.");
   if (index >= meta.chunks) throw new Error("Bad chunk.");
