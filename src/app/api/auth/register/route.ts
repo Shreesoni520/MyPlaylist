@@ -40,10 +40,7 @@ export async function POST(request: Request) {
       );
     }
     return withSession(NextResponse.json({ username: account.username }), account.username);
-  } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Could not create that account." },
-      { status: 500 }
-    );
+  } catch {
+    return NextResponse.json({ error: "Could not create that account. Try again." }, { status: 500 });
   }
 }

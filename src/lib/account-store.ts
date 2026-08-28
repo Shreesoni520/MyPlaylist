@@ -20,15 +20,23 @@ function usernameKey(username: string) {
 }
 
 function kvUrl() {
-  return process.env.KV_REST_API_URL?.replace(/\/$/, "") ?? "";
+  const raw = process.env.KV_REST_API_URL ?? "";
+  return raw.trim().replace(/^["']|["']$/g, "").replace(/\/$/, "");
 }
 
 function kvToken() {
-  return process.env.KV_REST_API_TOKEN ?? "";
+  return (process.env.KV_REST_API_TOKEN ?? "").trim().replace(/^["']|["']$/g, "");
 }
 
 function useKv() {
-  return Boolean(kvUrl() && kvToken());
+  const url = kvUrl();
+  if (!url || !kvToken()) return false;
+  try {
+    const parsed = new URL(url);
+    return parsed.protocol === "https:" || parsed.protocol === "http:";
+  } catch {
+    return false;
+  }
 }
 
 export function hashPassword(password: string, salt: string) {

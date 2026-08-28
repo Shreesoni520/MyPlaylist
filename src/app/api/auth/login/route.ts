@@ -28,10 +28,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Wrong password." }, { status: 401 });
     }
     return withSession(NextResponse.json({ username: account.username }), account.username);
-  } catch (error) {
-    return NextResponse.json(
-      { error: error instanceof Error ? error.message : "Could not sign in." },
-      { status: 500 }
-    );
+  } catch {
+    return NextResponse.json({ error: "Could not sign in. Try again." }, { status: 500 });
   }
 }
