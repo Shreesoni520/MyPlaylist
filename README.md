@@ -81,7 +81,7 @@ Sign up  →  your room  →  Player + Edit panels
 - **Room, playlists, library, and background** are saved with that account, so incognito or another computer can load the same room after you sign in.
 - **Desktop only.** Open it on a Windows PC, a Mac, or another large computer screen. Phones and tablets get a message instead of the room.
 - **Developer clean:** bump `ACCOUNT_CLEAN_VERSION` to wipe local rooms and delete every username from the account store. There is no reset button in the UI.
-- **Room videos** sit in IndexedDB on that computer (they are too large to copy automatically). Photos and YouTube songs still sync.
+- **Room videos** are saved with your account too, so a looping `.mp4` wall follows you across browsers. Keep it under 50MB.
 - **Track lookup** goes through `/api/find-track` so a pasted YouTube link can resolve to the full song.
 
 ---

@@ -1,4 +1,4 @@
-import { mkdir, readFile, writeFile } from "node:fs/promises";
+import { mkdir, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { ACCOUNT_CLEAN_VERSION } from "@/lib/clean-version";
@@ -15,11 +15,14 @@ export type { RoomProfile };
 
 const ACCOUNT_PREFIX = "mp:account:";
 const PROFILE_PREFIX = "mp:profile:";
+const VIDEO_PREFIX = "mp:video:";
 const CLEAN_KEY = "mp:clean_version";
 const LOCAL_FILE = path.join(process.cwd(), ".data", "accounts.json");
 const LOCAL_PROFILES_FILE = path.join(process.cwd(), ".data", "profiles.json");
+const LOCAL_VIDEO_DIR = path.join(process.cwd(), ".data", "videos");
 const LOCAL_CLEAN_FILE = path.join(process.cwd(), ".data", "clean-version");
 const CHUNK_SIZE = 700_000;
+const VIDEO_CHUNK = 600_000;
 
 function usernameKey(username: string) {
   return username.trim().toLowerCase();
@@ -123,6 +126,7 @@ async function deleteAllAccounts() {
     const keys = [
       ...(await kvScan(`${ACCOUNT_PREFIX}*`)),
       ...(await kvScan(`${PROFILE_PREFIX}*`)),
+      ...(await kvScan(`${VIDEO_PREFIX}*`)),
     ];
     if (keys.length) await kvSend(["DEL", ...keys]);
     await kvSend(["SET", CLEAN_KEY, ACCOUNT_CLEAN_VERSION]);
@@ -272,4 +276,121 @@ export async function saveRoomProfile(username: string, profile: RoomProfile) {
   const profiles = await readLocalProfiles();
   profiles[key] = profile;
   await writeLocalProfiles(profiles);
+}
+
+export type VideoMeta = {
+  stamp: string;
+  size: number;
+  type: string;
+  chunks: number;
+  complete: boolean;
+};
+
+async function deleteVideoKeys(key: string) {
+  if (useKv()) {
+    const keys = [
+      `${VIDEO_PREFIX}${key}:meta`,
+      ...(await kvScan(`${VIDEO_PREFIX}${key}:*`)),
+    ];
+    const unique = Array.from(new Set(keys));
+    if (unique.length) await kvSend(["DEL", ...unique]);
+    return;
+  }
+  try {
+    await rm(path.join(LOCAL_VIDEO_DIR, key), { recursive: true, force: true });
+  } catch {
+    /* ignore */
+  }
+}
+
+export async function initRoomVideo(username: string, meta: Omit<VideoMeta, "complete">) {
+  await applyAccountClean();
+  const key = usernameKey(username);
+  if (!key) throw new Error("Missing username.");
+  if (meta.size > 50 * 1024 * 1024) throw new Error("That video is too large.");
+  if (meta.chunks < 1 || meta.chunks > 200) throw new Error("That video cannot be saved.");
+  await deleteVideoKeys(key);
+  const record: VideoMeta = { ...meta, complete: false };
+  if (useKv()) {
+    await kvSend(["SET", `${VIDEO_PREFIX}${key}:meta`, JSON.stringify(record)]);
+    return;
+  }
+  const dir = path.join(LOCAL_VIDEO_DIR, key);
+  await mkdir(dir, { recursive: true });
+  await writeFile(path.join(dir, "meta.json"), JSON.stringify(record), "utf8");
+}
+
+export async function saveVideoChunk(username: string, index: number, data: Buffer) {
+  await applyAccountClean();
+  const key = usernameKey(username);
+  if (!key) throw new Error("Missing username.");
+  if (index < 0 || index > 199) throw new Error("Bad chunk.");
+  if (data.length > VIDEO_CHUNK + 8_192) throw new Error("Chunk too large.");
+  const meta = await getVideoMeta(username);
+  if (!meta || meta.complete) throw new Error("Video upload is not open.");
+  if (index >= meta.chunks) throw new Error("Bad chunk.");
+
+  if (useKv()) {
+    await kvSend(["SET", `${VIDEO_PREFIX}${key}:${index}`, data.toString("base64")]);
+    return;
+  }
+  const dir = path.join(LOCAL_VIDEO_DIR, key);
+  await mkdir(dir, { recursive: true });
+  await writeFile(path.join(dir, `${index}.bin`), data);
+}
+
+export async function completeRoomVideo(username: string) {
+  const meta = await getVideoMeta(username);
+  if (!meta) throw new Error("No video upload.");
+  const done = { ...meta, complete: true };
+  const key = usernameKey(username);
+  if (useKv()) {
+    await kvSend(["SET", `${VIDEO_PREFIX}${key}:meta`, JSON.stringify(done)]);
+    return;
+  }
+  await writeFile(path.join(LOCAL_VIDEO_DIR, key, "meta.json"), JSON.stringify(done), "utf8");
+}
+
+export async function getVideoMeta(username: string) {
+  await applyAccountClean();
+  const key = usernameKey(username);
+  if (!key) return null;
+  if (useKv()) {
+    const raw = await kvSend(["GET", `${VIDEO_PREFIX}${key}:meta`]);
+    if (typeof raw !== "string" || !raw) return null;
+    try {
+      return JSON.parse(raw) as VideoMeta;
+    } catch {
+      return null;
+    }
+  }
+  try {
+    const raw = await readFile(path.join(LOCAL_VIDEO_DIR, key, "meta.json"), "utf8");
+    return JSON.parse(raw) as VideoMeta;
+  } catch {
+    return null;
+  }
+}
+
+export async function getVideoChunk(username: string, index: number) {
+  const meta = await getVideoMeta(username);
+  if (!meta?.complete || index < 0 || index >= meta.chunks) return null;
+  const key = usernameKey(username);
+  if (useKv()) {
+    const raw = await kvSend(["GET", `${VIDEO_PREFIX}${key}:${index}`]);
+    if (typeof raw !== "string") return null;
+    return Buffer.from(raw, "base64");
+  }
+  try {
+    return await readFile(path.join(LOCAL_VIDEO_DIR, key, `${index}.bin`));
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteRoomVideoRecord(username: string) {
+  await applyAccountClean();
+  const key = usernameKey(username);
+  if (!key) return;
+  await deleteVideoKeys(key);
 }

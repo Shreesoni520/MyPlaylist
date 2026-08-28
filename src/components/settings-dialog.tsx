@@ -17,7 +17,7 @@ import { Label } from "@/components/ui/label";
 import { useAuth } from "@/context/auth-context";
 import { BACKGROUND_PRESETS } from "@/lib/backgrounds";
 import { isLightColor } from "@/lib/contrast";
-import { deleteRoomVideo, isMp4File, saveRoomVideo } from "@/lib/room-media";
+import { deleteCloudVideo, deleteRoomVideo, isMp4File, saveRoomVideo, uploadRoomVideo } from "@/lib/room-media";
 import { cn } from "@/lib/utils";
 import type { Background } from "@/lib/types";
 
@@ -72,6 +72,7 @@ export function SettingsDialog({
     lastBackground.current = key;
     if (currentUser.background.kind === "video" && background.kind !== "video") {
       await deleteRoomVideo(username).catch(() => undefined);
+      await deleteCloudVideo();
     }
     updateUser({ background });
   }
@@ -107,8 +108,10 @@ export function SettingsDialog({
     }
     setSavingVideo(true);
     try {
+      const stamp = `${file.name}:${Date.now()}`;
       await saveRoomVideo(username, file);
-      updateUser({ background: { kind: "video", value: `${file.name}:${Date.now()}` } });
+      await uploadRoomVideo(file, stamp);
+      updateUser({ background: { kind: "video", value: stamp } });
       toast.success("Looping .mp4 room video set");
     } catch {
       toast.error("Could not save that video.");
