@@ -11,14 +11,9 @@ import {
 import {
   createAccount,
   defaultAvatar,
-  getSessionUsername,
   getUser,
-  hashPassword,
   isCustomPhoto,
-  isValidUsername,
-  makeSalt,
   saveUser,
-  setSessionUsername,
   wipeSiteData,
   withDefaultAvatar,
 } from "@/lib/storage";
@@ -38,6 +33,23 @@ type AuthContextValue = {
 
 const AuthContext = createContext<AuthContextValue | null>(null);
 
+async function readError(response: Response) {
+  try {
+    const data = (await response.json()) as { error?: string };
+    return data.error || "Could not continue";
+  } catch {
+    return "Could not continue";
+  }
+}
+
+function localProfile(username: string) {
+  const existing = getUser(username);
+  if (existing) return withDefaultAvatar(existing);
+  const created = createAccount(username, "", "");
+  saveUser(created);
+  return created;
+}
+
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [ready, setReady] = useState(false);
   const [user, setUser] = useState<UserAccount | null>(null);
@@ -49,12 +61,21 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
       const didWipe = wipeSiteData();
       if (didWipe) await wipeRoomVideos().catch(() => undefined);
       if (cancelled) return;
-      const session = getSessionUsername();
-      const current = session ? getUser(session) : null;
-      const normalized = current ? withDefaultAvatar(current) : null;
-      if (normalized && normalized.avatar !== current?.avatar) saveUser(normalized);
-      setUser(normalized);
-      setReady(true);
+      try {
+        const response = await fetch("/api/auth/me", { cache: "no-store" });
+        const data = (await response.json()) as { username?: string | null };
+        if (cancelled) return;
+        if (data.username) {
+          const profile = localProfile(data.username);
+          saveUser(profile);
+          setUser(profile);
+        } else {
+          setUser(null);
+        }
+      } catch {
+        if (!cancelled) setUser(null);
+      }
+      if (!cancelled) setReady(true);
     }
 
     void boot();
@@ -64,34 +85,29 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   const login = useCallback(async (username: string, password: string) => {
-    const existing = getUser(username);
-    if (!existing) throw new Error("No account with that username.");
-    const hash = await hashPassword(password, existing.salt);
-    if (hash !== existing.passwordHash) throw new Error("Wrong password.");
-    const normalized = withDefaultAvatar(existing);
-    if (normalized.avatar !== existing.avatar) saveUser(normalized);
-    setSessionUsername(normalized.username);
-    setUser(normalized);
+    const response = await fetch("/api/auth/login", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password }),
+    });
+    if (!response.ok) throw new Error(await readError(response));
+    const data = (await response.json()) as { username: string };
+    setUser(localProfile(data.username));
   }, []);
 
   const register = useCallback(async (username: string, password: string, confirm: string) => {
-    const trimmed = username.trim();
-    if (!isValidUsername(trimmed)) {
-      throw new Error("Username must be 3-20 letters, numbers, dots, or underscores.");
-    }
-    if (password.length < 4) throw new Error("Password must be at least 4 characters.");
-    if (password !== confirm) throw new Error("Passwords do not match.");
-    if (getUser(trimmed)) throw new Error("That username is taken.");
-    const salt = makeSalt();
-    const passwordHash = await hashPassword(password, salt);
-    const account = createAccount(trimmed, passwordHash, salt);
-    saveUser(account);
-    setSessionUsername(account.username);
-    setUser(account);
+    const response = await fetch("/api/auth/register", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ username, password, confirm }),
+    });
+    if (!response.ok) throw new Error(await readError(response));
+    const data = (await response.json()) as { username: string };
+    setUser(localProfile(data.username));
   }, []);
 
   const logout = useCallback(() => {
-    setSessionUsername(null);
+    void fetch("/api/auth/logout", { method: "POST" });
     setUser(null);
   }, []);
 

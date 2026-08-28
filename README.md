@@ -25,7 +25,7 @@ Most playlist apps live on someone else's server. This one lives in **your room*
 
 After login you get a full-screen space: pick a color, photo, or looping `.mp4` for the wall, then drag a glass **Player** and **Edit** window wherever you want. Add songs with a YouTube link. Build playlists. Loop one track or shuffle the lot.
 
-No cloud account. No tracking. Your library stays on this machine.
+No cloud account. No tracking. Your playlists and room stay on this computer.
 
 **Live:** [shree-s-my-playlist.vercel.app](https://shree-s-my-playlist.vercel.app)
 
@@ -35,13 +35,15 @@ No cloud account. No tracking. Your library stays on this machine.
 
 | | |
 | --- | --- |
+| **Desktop only** | Built for a computer or monitor — phones see a short explanation instead |
+| **Unique username** | One username for the whole site, any browser |
 | **Your room** | Solid color, image upload, image URL, or a silent looping `.mp4` |
 | **Floating player** | Drag, resize, minimize, maximize — album art, seek, volume |
 | **YouTube songs** | Paste a link; title and artist are optional |
 | **Playlists** | Liked Songs, Discover Mix, plus any lists you create |
 | **Loop & shuffle** | Off / all / one, plus shuffle, from the `···` menu |
 | **Light on dark** | Header text flips black on a light room, white on a dark one |
-| **Private by default** | Accounts and tracks are stored in the browser, not a database |
+| **Private room data** | Playlists, volume, and the room live in this browser. Clear site data and that room is gone. The username stays yours. |
 
 ---
 
@@ -75,11 +77,11 @@ Sign up  →  your room  →  Player + Edit windows
                 └─ Playlists, volume, loop, shuffle
 ```
 
-- **Auth** is username + password, hashed in the browser (`localStorage`).
+- **Auth** is username + password. Accounts are stored on the server, so a username can only be taken once — Chrome, Firefox, another PC, it is the same list.
+- **Room, playlists, and library** stay in the browser. Clearing site data wipes that room, but you can sign back in with the same username.
+- **Desktop only.** Phones and small screens get a message instead of the room.
 - **Room videos** sit in IndexedDB so a looping `.mp4` can be large without blowing storage quotas.
 - **Track lookup** goes through `/api/find-track` so a pasted YouTube link can resolve to the full song.
-
-There is no server database to empty. A fresh browser (or a site reset) is a new start.
 
 ---
 
