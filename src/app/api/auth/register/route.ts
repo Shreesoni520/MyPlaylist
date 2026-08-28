@@ -39,7 +39,10 @@ export async function POST(request: Request) {
         { status: 409 }
       );
     }
-    return withSession(NextResponse.json({ username: account.username }), account.username);
+    return withSession(
+      NextResponse.json({ username: account.username, profile: null }),
+      account.username
+    );
   } catch {
     return NextResponse.json({ error: "Could not create that account. Try again." }, { status: 500 });
   }

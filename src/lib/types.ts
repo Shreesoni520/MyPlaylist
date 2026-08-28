@@ -36,3 +36,12 @@ export type UserAccount = {
   volume: number;
   createdAt: number;
 };
+
+export type RoomProfile = {
+  displayName: string;
+  avatar: string;
+  background: Background;
+  playlists: Playlist[];
+  library: Track[];
+  volume: number;
+};

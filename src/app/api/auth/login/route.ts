@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAccount, passwordsMatch } from "@/lib/account-store";
+import { getAccount, getProfile, passwordsMatch } from "@/lib/account-store";
 import { withSession } from "@/lib/session";
 
 export const runtime = "nodejs";
@@ -27,7 +27,11 @@ export async function POST(request: Request) {
     if (!passwordsMatch(password, account)) {
       return NextResponse.json({ error: "Wrong password." }, { status: 401 });
     }
-    return withSession(NextResponse.json({ username: account.username }), account.username);
+    const profile = await getProfile(account.username);
+    return withSession(
+      NextResponse.json({ username: account.username, profile }),
+      account.username
+    );
   } catch {
     return NextResponse.json({ error: "Could not sign in. Try again." }, { status: 500 });
   }

@@ -2,6 +2,8 @@ import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { createHash, randomBytes, timingSafeEqual } from "node:crypto";
 import { ACCOUNT_CLEAN_VERSION } from "@/lib/clean-version";
+import { DEFAULT_BACKGROUND } from "@/lib/backgrounds";
+import type { RoomProfile } from "@/lib/types";
 
 export type ServerAccount = {
   username: string;
@@ -11,8 +13,10 @@ export type ServerAccount = {
 };
 
 const ACCOUNT_PREFIX = "mp:account:";
+const PROFILE_PREFIX = "mp:profile:";
 const CLEAN_KEY = "mp:clean_version";
 const LOCAL_FILE = path.join(process.cwd(), ".data", "accounts.json");
+const LOCAL_PROFILES_FILE = path.join(process.cwd(), ".data", "profiles.json");
 const LOCAL_CLEAN_FILE = path.join(process.cwd(), ".data", "clean-version");
 
 function usernameKey(username: string) {
@@ -85,6 +89,20 @@ async function writeLocal(accounts: Record<string, ServerAccount>) {
   await writeFile(LOCAL_FILE, JSON.stringify(accounts, null, 2), "utf8");
 }
 
+async function readLocalProfiles(): Promise<Record<string, RoomProfile>> {
+  try {
+    const raw = await readFile(LOCAL_PROFILES_FILE, "utf8");
+    return JSON.parse(raw) as Record<string, RoomProfile>;
+  } catch {
+    return {};
+  }
+}
+
+async function writeLocalProfiles(profiles: Record<string, RoomProfile>) {
+  await mkdir(path.dirname(LOCAL_PROFILES_FILE), { recursive: true });
+  await writeFile(LOCAL_PROFILES_FILE, JSON.stringify(profiles, null, 2), "utf8");
+}
+
 async function kvScan(pattern: string) {
   const keys: string[] = [];
   let cursor = "0";
@@ -100,13 +118,16 @@ async function kvScan(pattern: string) {
 
 async function deleteAllAccounts() {
   if (useKv()) {
-    const keys = await kvScan(`${ACCOUNT_PREFIX}*`);
+    const accountKeys = await kvScan(`${ACCOUNT_PREFIX}*`);
+    const profileKeys = await kvScan(`${PROFILE_PREFIX}*`);
+    const keys = [...accountKeys, ...profileKeys];
     if (keys.length) await kvSend(["DEL", ...keys]);
     await kvSend(["SET", CLEAN_KEY, ACCOUNT_CLEAN_VERSION]);
     return;
   }
 
   await writeLocal({});
+  await writeLocalProfiles({});
   await mkdir(path.dirname(LOCAL_CLEAN_FILE), { recursive: true });
   await writeFile(LOCAL_CLEAN_FILE, ACCOUNT_CLEAN_VERSION, "utf8");
 }
@@ -171,4 +192,69 @@ export async function createAccountRecord(username: string, password: string) {
   accounts[key] = account;
   await writeLocal(accounts);
   return account;
+}
+
+function compactProfile(profile: RoomProfile): RoomProfile {
+  const next = { ...profile };
+  if (next.avatar.startsWith("data:image/") && next.avatar.length > 400_000) {
+    next.avatar = "";
+  }
+  if (
+    (next.background.kind === "upload" && next.background.value.length > 400_000) ||
+    next.background.kind === "video"
+  ) {
+    next.background = DEFAULT_BACKGROUND;
+  }
+  return next;
+}
+
+export async function getProfile(username: string) {
+  await applyAccountClean();
+  const key = usernameKey(username);
+  if (!key) return null;
+
+  if (useKv()) {
+    const raw = await kvSend(["GET", `${PROFILE_PREFIX}${key}`]);
+    if (typeof raw !== "string" || !raw) return null;
+    try {
+      return JSON.parse(raw) as RoomProfile;
+    } catch {
+      return null;
+    }
+  }
+
+  const profiles = await readLocalProfiles();
+  return profiles[key] ?? null;
+}
+
+export async function saveProfile(username: string, profile: RoomProfile) {
+  await applyAccountClean();
+  const key = usernameKey(username);
+  if (!key) return false;
+
+  const payload = compactProfile(profile);
+  const json = JSON.stringify(payload);
+
+  if (useKv()) {
+    try {
+      await kvSend(["SET", `${PROFILE_PREFIX}${key}`, json]);
+      return true;
+    } catch {
+      const smaller = compactProfile({
+        ...payload,
+        avatar: payload.avatar.startsWith("data:") ? "" : payload.avatar,
+        background:
+          payload.background.kind === "upload" || payload.background.kind === "video"
+            ? DEFAULT_BACKGROUND
+            : payload.background,
+      });
+      await kvSend(["SET", `${PROFILE_PREFIX}${key}`, JSON.stringify(smaller)]);
+      return true;
+    }
+  }
+
+  const profiles = await readLocalProfiles();
+  profiles[key] = payload;
+  await writeLocalProfiles(profiles);
+  return true;
 }
