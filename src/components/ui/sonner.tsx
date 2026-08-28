@@ -15,15 +15,13 @@ const Toaster = ({ ...props }: ToasterProps) => {
       const item = target.closest("[data-sonner-toast]")
       if (!(item instanceof HTMLElement)) return
       if (item.getAttribute("data-type") === "loading") return
-      const title = item.querySelector("[data-title]")?.textContent?.trim()
-      const match = toast.getToasts().find((entry) => {
-        if (!("title" in entry) || typeof entry.title !== "string") return false
-        return entry.title.trim() === title
-      })
-      if (match) toast.dismiss(match.id)
+      const index = Number(item.getAttribute("data-index"))
+      const toasts = toast.getToasts()
+      const entry = (Number.isInteger(index) ? toasts[index] : undefined) ?? toasts[0]
+      toast.dismiss(entry?.id)
     }
-    document.addEventListener("click", dismissOnClick)
-    return () => document.removeEventListener("click", dismissOnClick)
+    document.addEventListener("click", dismissOnClick, true)
+    return () => document.removeEventListener("click", dismissOnClick, true)
   }, [])
 
   return (
@@ -53,14 +51,14 @@ const Toaster = ({ ...props }: ToasterProps) => {
           "--normal-text": "var(--popover-foreground)",
           "--normal-border": "var(--border)",
           "--border-radius": "var(--radius)",
-          "--width": "360px",
+          "--width": "22rem",
         } as React.CSSProperties
       }
       toastOptions={{
         classNames: {
           toast: "cn-toast cursor-pointer",
-          title: "whitespace-nowrap",
-          description: "line-clamp-1",
+          title: "leading-snug",
+          description: "leading-snug",
         },
       }}
       {...props}
